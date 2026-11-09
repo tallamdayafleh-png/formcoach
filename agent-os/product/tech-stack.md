@@ -6,7 +6,7 @@
 
 | Category | Technology | Purpose |
 |----------|-----------|---------|
-| Language | Python 3.11+ | CV pipeline, agent, and backend |
+| Language | Python 3.10+ | CV pipeline, agent, and backend |
 | Pose estimation | MediaPipe Pose | Per-frame body keypoints |
 | Video processing | OpenCV | Frame reading, skeleton overlay rendering |
 | Numerics | NumPy | Joint-angle math, signal smoothing for rep detection |

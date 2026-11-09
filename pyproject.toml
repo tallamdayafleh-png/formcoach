@@ -2,10 +2,10 @@
 name = "formcoach"
 version = "0.1.0"
 description = "AI gym form coach: pose estimation + a self-checking LLM coach."
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 
 [tool.ruff]
-target-version = "py311"
+target-version = "py310"
 line-length = 88
 extend-exclude = ["web"]
 
@@ -15,7 +15,7 @@ select = [
     "W",   # pycodestyle warnings
     "F",   # pyflakes (unused imports, undefined names)
     "I",   # import sorting
-    "UP",  # pyupgrade (modern syntax for py311)
+    "UP",  # pyupgrade (modern syntax for py310)
     "B",   # bugbear (likely bugs)
     "ANN", # type annotations (tech-stack: hints required on public functions)
 ]
