@@ -3,6 +3,7 @@ Constitutional critique-and-revise loop for the Gym Form Coach.
 
 Plug in any LLM provider by implementing `call_llm(prompt) -> str`.
 """
+
 import json
 from pathlib import Path
 
@@ -70,7 +71,8 @@ def coach(pose_summary: dict) -> dict:
         if result["passes"]:
             break
         feedback = revise(feedback, result["violations"], pose_summary)
-    return {"feedback": feedback, "history": history}  # history = great for your eval + demo
+    # history (each draft + its critique) feeds the eval scripts and the demo
+    return {"feedback": feedback, "history": history}
 
 
 if __name__ == "__main__":

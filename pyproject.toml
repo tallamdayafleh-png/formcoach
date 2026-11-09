@@ -1,0 +1,29 @@
+[project]
+name = "formcoach"
+version = "0.1.0"
+description = "AI gym form coach: pose estimation + a self-checking LLM coach."
+requires-python = ">=3.11"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+extend-exclude = ["web"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes (unused imports, undefined names)
+    "I",   # import sorting
+    "UP",  # pyupgrade (modern syntax for py311)
+    "B",   # bugbear (likely bugs)
+    "ANN", # type annotations (tech-stack: hints required on public functions)
+]
+ignore = [
+    # `ruff format` already wraps code at line-length; the remaining long lines
+    # are LLM prompt text, where wrapping would change what the model sees.
+    "E501",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["ANN"]
