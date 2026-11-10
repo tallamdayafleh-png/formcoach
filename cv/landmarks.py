@@ -47,6 +47,23 @@ NUM_LANDMARKS = len(LANDMARK_NAMES)
 # name -> index, e.g. LANDMARK_INDEX["left_knee"] == 25
 LANDMARK_INDEX: dict[str, int] = {name: i for i, name in enumerate(LANDMARK_NAMES)}
 
+
+def _mirror_name(name: str) -> str:
+    for a, b in (("left_", "right_"), ("right_", "left_")):
+        if name.startswith(a):
+            return b + name.removeprefix(a)
+    for a, b in (("_left", "_right"), ("_right", "_left")):  # mouth_left/right
+        if name.endswith(a):
+            return name.removesuffix(a) + b
+    return name  # nose
+
+
+# index -> index of the same body part on the other side, e.g. left_knee (25)
+# -> right_knee (26). Used to fix left/right labels on mirrored selfie video.
+MIRROR_INDEX: tuple[int, ...] = tuple(
+    LANDMARK_INDEX[_mirror_name(name)] for name in LANDMARK_NAMES
+)
+
 _BODY_CONNECTION_NAMES: tuple[tuple[str, str], ...] = (
     # torso
     ("left_shoulder", "right_shoulder"),

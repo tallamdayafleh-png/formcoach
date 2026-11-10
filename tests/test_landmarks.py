@@ -4,6 +4,7 @@ from cv.landmarks import (
     BODY_CONNECTIONS,
     LANDMARK_INDEX,
     LANDMARK_NAMES,
+    MIRROR_INDEX,
     NUM_LANDMARKS,
 )
 
@@ -20,6 +21,19 @@ def test_index_lookup():
     assert LANDMARK_INDEX["left_hip"] == 23
     assert LANDMARK_INDEX["left_knee"] == 25
     assert LANDMARK_INDEX["right_ankle"] == 28
+
+
+def test_mirror_swaps_left_and_right():
+    assert MIRROR_INDEX[LANDMARK_INDEX["left_knee"]] == LANDMARK_INDEX["right_knee"]
+    assert MIRROR_INDEX[LANDMARK_INDEX["right_hip"]] == LANDMARK_INDEX["left_hip"]
+    assert MIRROR_INDEX[LANDMARK_INDEX["mouth_left"]] == LANDMARK_INDEX["mouth_right"]
+    assert MIRROR_INDEX[LANDMARK_INDEX["nose"]] == LANDMARK_INDEX["nose"]
+
+
+def test_mirror_is_its_own_inverse():
+    # swapping twice must give back the original labels
+    assert all(MIRROR_INDEX[MIRROR_INDEX[i]] == i for i in range(NUM_LANDMARKS))
+    assert sorted(MIRROR_INDEX) == list(range(NUM_LANDMARKS))
 
 
 def test_connections_are_valid_body_joints():

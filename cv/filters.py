@@ -14,6 +14,7 @@ identical at 15 fps (webcam) and 30 fps (phone), and on variable frame rate.
 from __future__ import annotations
 
 import math
+from collections import deque
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -54,6 +55,27 @@ class CausalSmoother:
             self._y += alpha * (x - self._y)
         self._t = t_ms
         return self._y
+
+
+class RunningMax:
+    """Largest value seen in the last window_s seconds (past frames only).
+
+    Uses a monotonic queue, so each update is O(1) on average: values that
+    can never be the maximum again (older and smaller) are dropped.
+    """
+
+    def __init__(self, window_s: float) -> None:
+        self._window_ms = window_s * 1000.0
+        self._q: deque[tuple[float, float]] = deque()  # (t_ms, value)
+
+    def update(self, t_ms: float, x: float) -> float:
+        if math.isfinite(x):
+            while self._q and self._q[-1][1] <= x:
+                self._q.pop()
+            self._q.append((t_ms, x))
+        while self._q and self._q[0][0] < t_ms - self._window_ms:
+            self._q.popleft()
+        return self._q[0][1] if self._q else math.nan
 
 
 def smooth_series(

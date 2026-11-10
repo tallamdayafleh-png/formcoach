@@ -2,8 +2,16 @@
 
 The same JSON file is read by the browser in live mode, so these numbers
 must never be duplicated as constants in Python or TypeScript. Loading is
-strict: an unknown or missing key raises, so a typo like "dwon_deg" can't
+strict: an unknown or missing key raises, so a typo like "dwon" can't
 silently fall back to some default and change how reps are counted.
+
+Units:
+- squat.rep.side:  knee angle in degrees (180 = straight leg)
+- squat.rep.front: hip height as a fraction of recent standing height (1 = standing)
+- squat.depth.max_thigh_deg: thigh angle from horizontal at the bottom, using
+  MediaPipe's hip point (the hip joint, which sits above the hip crease, so a
+  parallel squat reads roughly 10-25 degrees, not 0)
+- squat.valgus.min_knee_hip_width_ratio: knee-to-knee width / hip width
 """
 
 from __future__ import annotations
@@ -17,15 +25,40 @@ from typing import Any, TypeVar
 T = TypeVar("T")
 
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "config" / "form_thresholds.json"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 @dataclass(frozen=True)
 class RepThresholds:
-    down_deg: float  # knee angle must drop below this to count as "down"
-    up_deg: float  # ...then rise above this to finish the rep
+    down: float  # signal must drop below this to count as "down"
+    up: float  # ...then rise above this to finish the rep
+    min_drop: float  # signal must fall at least this much from standing
     min_rep_s: float  # reps shorter than this are noise
-    min_drop_deg: float  # knee must bend at least this much from standing
+
+
+@dataclass(frozen=True)
+class DepthThresholds:
+    max_thigh_deg: float  # bottom thigh angle at or below this = depth hit
+
+
+@dataclass(frozen=True)
+class ValgusThresholds:
+    min_knee_hip_width_ratio: float  # below this at any point in a rep = caving
+
+
+@dataclass(frozen=True)
+class SquatThresholds:
+    rep_side: RepThresholds
+    rep_front: RepThresholds
+    depth: DepthThresholds
+    valgus: ValgusThresholds
+
+
+@dataclass(frozen=True)
+class ViewThresholds:
+    side_max_shoulder_ratio: float  # shoulder width / torso length
+    front_min_shoulder_ratio: float
+    classify_s: float  # decide the view from this many seconds at the start
 
 
 @dataclass(frozen=True)
@@ -33,18 +66,24 @@ class TrackingThresholds:
     visibility_min: float  # landmarks below this visibility are ignored
     max_gap_s: float  # hold the last value through gaps up to this long
     smooth_tau_s: float  # EMA time constant; ~ the smoothing lag in seconds
+    standing_ref_s: float  # look-back window for the standing hip height
+    low_confidence_below: float  # usable-frame fraction below this = low
 
 
 @dataclass(frozen=True)
 class FormThresholds:
-    squat_rep: RepThresholds
+    squat: SquatThresholds
+    view: ViewThresholds
     tracking: TrackingThresholds
 
 
-def _section(cls: type[T], data: object, where: str) -> T:
+def _obj(data: object, where: str) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise ValueError(f"{where} must be an object")
-    expected = {f.name for f in fields(cls)}
+    return data
+
+
+def _keys(data: dict[str, Any], expected: set[str], where: str) -> None:
     missing = sorted(expected - data.keys())
     unknown = sorted(data.keys() - expected)
     if missing or unknown:
@@ -55,6 +94,11 @@ def _section(cls: type[T], data: object, where: str) -> T:
         if missing:
             problems.append(f"missing keys {missing}")
         raise ValueError(f"{where} has " + " and ".join(problems))
+
+
+def _section(cls: type[T], data: object, where: str) -> T:
+    data = _obj(data, where)
+    _keys(data, {f.name for f in fields(cls)}, where)
     for key, value in data.items():
         # bool is a subclass of int in Python, so reject it explicitly
         if isinstance(value, bool) or not isinstance(value, (int, float)):
@@ -62,6 +106,15 @@ def _section(cls: type[T], data: object, where: str) -> T:
         if value < 0:
             raise ValueError(f"{where}.{key} must be >= 0, got {value}")
     return cls(**{k: float(v) for k, v in data.items()})
+
+
+def _rep(data: object, where: str, max_up: float) -> RepThresholds:
+    rep = _section(RepThresholds, data, where)
+    if not 0 < rep.down < rep.up <= max_up:
+        raise ValueError(
+            f"{where} needs 0 < down < up <= {max_up}, got down={rep.down}, up={rep.up}"
+        )
+    return rep
 
 
 def parse_thresholds(data: dict[str, Any]) -> FormThresholds:
@@ -72,20 +125,28 @@ def parse_thresholds(data: dict[str, Any]) -> FormThresholds:
             f"Unsupported thresholds schema_version {version!r}; "
             f"expected {SCHEMA_VERSION}"
         )
-    squat = data.get("squat")
-    if not isinstance(squat, dict) or "rep" not in squat:
-        raise ValueError("config is missing squat.rep")
-    rep = _section(RepThresholds, squat["rep"], "squat.rep")
-    tracking = _section(TrackingThresholds, data.get("tracking"), "tracking")
+    _keys(data, {"schema_version", "squat", "view", "tracking"}, "config")
+    squat = _obj(data["squat"], "squat")
+    _keys(squat, {"rep", "depth", "valgus"}, "squat")
+    rep = _obj(squat["rep"], "squat.rep")
+    _keys(rep, {"side", "front"}, "squat.rep")
 
-    if not 0 < rep.down_deg < rep.up_deg <= 180:
+    squat_th = SquatThresholds(
+        rep_side=_rep(rep["side"], "squat.rep.side", max_up=180),
+        rep_front=_rep(rep["front"], "squat.rep.front", max_up=1),
+        depth=_section(DepthThresholds, squat["depth"], "squat.depth"),
+        valgus=_section(ValgusThresholds, squat["valgus"], "squat.valgus"),
+    )
+    view = _section(ViewThresholds, data["view"], "view")
+    if view.side_max_shoulder_ratio >= view.front_min_shoulder_ratio:
         raise ValueError(
-            "squat.rep needs 0 < down_deg < up_deg <= 180, got "
-            f"down_deg={rep.down_deg}, up_deg={rep.up_deg}"
+            "view needs side_max_shoulder_ratio < front_min_shoulder_ratio"
         )
-    if tracking.visibility_min > 1:
-        raise ValueError("tracking.visibility_min must be between 0 and 1")
-    return FormThresholds(squat_rep=rep, tracking=tracking)
+    tracking = _section(TrackingThresholds, data["tracking"], "tracking")
+    for name in ("visibility_min", "low_confidence_below"):
+        if getattr(tracking, name) > 1:
+            raise ValueError(f"tracking.{name} must be between 0 and 1")
+    return FormThresholds(squat=squat_th, view=view, tracking=tracking)
 
 
 def load_thresholds(path: str | Path = CONFIG_PATH) -> FormThresholds:

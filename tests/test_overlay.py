@@ -2,10 +2,20 @@ import cv2
 import numpy as np
 import pytest
 
+from cv.form import DepthResult, FormSignals, RepForm, ValgusResult
 from cv.landmarks import LANDMARK_INDEX
-from cv.overlay import draw_skeleton, hud_lines, render_overlay, to_pixel
+from cv.overlay import (
+    GREEN,
+    RED,
+    HudContext,
+    draw_skeleton,
+    hud_lines,
+    render_overlay,
+    to_pixel,
+)
 from cv.reps import Rep, RepResult
 from cv.schema import FramePose, Landmark, PoseSequence, VideoMeta
+from cv.view import ViewResult
 
 W, H = 200, 400
 
@@ -63,36 +73,91 @@ def test_face_points_not_drawn():
 
 
 def _rep(number: int, end_frame: int) -> Rep:
-    return Rep(number, end_frame - 20, end_frame - 10, end_frame, 0, 0, 0, 90, 70)
+    return Rep(number, end_frame - 20, end_frame - 10, end_frame, 0, 0, 0, 90, 90, 70)
 
 
-def _reps() -> RepResult:
+def _ctx(view: str = "side") -> HudContext:
     knee = np.array([170.0, 120.0, np.nan, 160.0, 160.0])
     hip = np.array([175.0, 100.0, np.nan, 165.0, 165.0])
-    return RepResult("left", [_rep(1, 1), _rep(2, 3)], 0.8, knee, hip)
+    ratio = np.array([1.0, 0.7, np.nan, 0.98, 0.99])
+    side = "both" if view == "front" else "left"
+    reps = RepResult(
+        ViewResult(view, 0.1), side, "knee_deg", [_rep(1, 1), _rep(2, 3)], 0.8,
+        ratio if view == "front" else knee, knee, hip,
+    )  # fmt: skip
+    signals = FormSignals(
+        thigh_deg=np.array([85.0, 20.0, np.nan, 80.0, 80.0]),
+        knee_width_ratio=np.array([1.1, 0.8, np.nan, 1.0, 1.0]),
+    )
+    if view == "front":
+        forms = [
+            RepForm(1, None, ValgusResult(0.95, False)),
+            RepForm(2, None, ValgusResult(0.74, True)),
+        ]
+    else:
+        forms = [
+            RepForm(1, DepthResult(20.0, True), None),
+            RepForm(2, DepthResult(38.0, False), None),
+        ]
+    return HudContext(reps, forms, signals, max_thigh_deg=28)
+
+
+def _text(frame: int, ctx: HudContext) -> list[str]:
+    return [t for t, _ in hud_lines(FramePose(frame, 0.0, None, None), ctx)]
 
 
 def test_hud_without_reps_is_one_line():
     assert len(hud_lines(FramePose(0, 0.0, None, None))) == 1
 
 
+@pytest.mark.parametrize("view", ["side", "front"])
 @pytest.mark.parametrize(("frame", "count"), [(0, 0), (1, 1), (2, 1), (3, 2), (4, 2)])
-def test_hud_rep_count_matches_completed_reps(frame, count):
-    line = hud_lines(FramePose(frame, 0.0, None, None), _reps())[1]
-    assert line.startswith(f"REP {count} ")
+def test_hud_rep_count_matches_completed_reps(view, frame, count):
+    # every overlay, side or front, shows the rep count
+    assert _text(frame, _ctx(view))[1].startswith(f"REP {count} ")
 
 
-def test_hud_shows_angles_and_side():
-    line = hud_lines(FramePose(1, 0.0, None, None), _reps())[1]
-    assert "knee 120 deg" in line
-    assert "hip 100 deg" in line
-    assert "(left leg)" in line
+def test_hud_side_shows_angles_and_depth_marker():
+    lines = _text(1, _ctx("side"))
+    assert "(side view, left leg)" in lines[1]
+    assert "knee 120 deg" in lines[2]
+    assert "hip 100 deg" in lines[2]
+    assert "thigh 20 deg   DEPTH" in lines[2]  # 20 <= 28 threshold
+    assert "DEPTH" not in _text(0, _ctx("side"))[2]  # 85 deg: standing
 
 
 def test_hud_untrusted_angle_shows_dashes():
-    line = hud_lines(FramePose(2, 0.0, None, None), _reps())[1]
+    line = _text(2, _ctx("side"))[2]
     assert "knee --" in line
-    assert "hip --" in line
+    assert "thigh --" in line
+
+
+def test_hud_front_shows_ratios():
+    lines = _text(1, _ctx("front"))
+    assert "(front view)" in lines[1]
+    assert "hip height 0.70" in lines[2]
+    assert "knee/hip width 0.80" in lines[2]
+
+
+@pytest.mark.parametrize(
+    ("view", "frame", "text", "color"),
+    [
+        ("side", 1, "rep 1: DEPTH OK", GREEN),
+        ("side", 3, "rep 2: ABOVE PARALLEL", RED),
+        ("front", 1, "rep 1: KNEES OK", GREEN),
+        ("front", 4, "rep 2: KNEES CAVING", RED),
+    ],
+)
+def test_hud_verdict_for_last_rep(view, frame, text, color):
+    verdict_text, verdict_color = hud_lines(
+        FramePose(frame, 0.0, None, None), _ctx(view)
+    )[-1]
+    assert verdict_text.startswith(text)
+    assert verdict_color == color
+
+
+def test_hud_no_verdict_before_first_rep():
+    assert len(_text(0, _ctx("side"))) == 3
 
 
 # --- render_overlay ----------------------------------------------------------

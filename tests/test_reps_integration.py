@@ -11,7 +11,7 @@ pytestmark = needs_clip
 def test_squat_clip_has_five_reps(squat_sequence):
     result = detect_reps(squat_sequence)
     assert len(result.reps) == 5
-    assert result.side == "left"  # the leg facing the camera
+    assert result.side == "right"  # real leg facing the camera (video is mirrored)
     # bottoms observed by eye in the overlay, about 100 frames apart
     for rep, expected in zip(result.reps, [40, 140, 240, 340, 440], strict=True):
         assert rep.bottom_frame == pytest.approx(expected, abs=15)

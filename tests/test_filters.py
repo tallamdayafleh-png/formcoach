@@ -3,7 +3,7 @@ import math
 import numpy as np
 import pytest
 
-from cv.filters import CausalSmoother, landmark_track, smooth_series
+from cv.filters import CausalSmoother, RunningMax, landmark_track, smooth_series
 from cv.schema import FramePose, Landmark, PoseSequence, VideoMeta
 
 
@@ -68,6 +68,22 @@ def test_leading_nan_stays_nan():
     out = smooth_series([np.nan, 5.0], [0.0, 33.0], 0.1, 0.3)
     assert np.isnan(out[0])
     assert out[1] == 5.0
+
+
+def test_running_max_window():
+    rm = RunningMax(window_s=1.0)
+    out = [
+        rm.update(t, x) for t, x in [(0, 5), (500, 3), (900, 4), (1200, 2), (1600, 1)]
+    ]
+    # 5 drops out of the window after t=1000; then 4 is the max until t=1900
+    assert out == [5, 5, 5, 4, 4]
+
+
+def test_running_max_skips_nan():
+    rm = RunningMax(1.0)
+    assert math.isnan(rm.update(0, math.nan))
+    assert rm.update(100, 2.0) == 2.0
+    assert rm.update(200, math.nan) == 2.0
 
 
 def test_landmark_track_scales_to_pixels_and_masks():

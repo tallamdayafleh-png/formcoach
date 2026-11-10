@@ -11,8 +11,18 @@ import numpy as np
 from mediapipe.tasks.python import BaseOptions, vision
 
 from cv.models import ensure_pose_model
-from cv.schema import FramePose, Landmark, PoseSequence, VideoMeta
-from cv.video import iter_frames, read_info
+from cv.schema import (
+    MIRRORED_CHOICES,
+    FramePose,
+    Landmark,
+    PoseSequence,
+    VideoMeta,
+    parse_mirrored,
+    with_mirrored,
+)
+from cv.video import is_front_camera, iter_frames, read_info
+
+__all__ = ["MIRRORED_CHOICES", "extract_keypoints", "parse_mirrored"]
 
 # Frames are shrunk so their longest side is at most this before inference.
 # The model itself runs at 256x256, so feeding it 4K only costs time; landmark
@@ -50,13 +60,21 @@ def extract_keypoints(
     max_side: int = DEFAULT_MAX_SIDE,
     max_frames: int | None = None,
     on_progress: Callable[[int], None] | None = None,
+    mirrored: bool | None = None,
 ) -> PoseSequence:
     """Detect one person's pose on every frame of a video.
 
     Frames where no person is found are kept, with landmarks set to None, so
     later steps can tell "no data" apart from "bad form".
+
+    mirrored: whether the video is a mirror image, so left/right labels get
+    swapped (see schema.with_mirrored). None = auto: assume mirrored when
+    iPhone metadata says the front camera was used, since iOS mirrors
+    front-camera video when "Mirror Front Camera" is on.
     """
     video_path = Path(video_path)
+    if mirrored is None:
+        mirrored = is_front_camera(video_path) is True
     model_path = ensure_pose_model() if model_path is None else model_path
     info = read_info(video_path)
 
@@ -104,4 +122,5 @@ def extract_keypoints(
         height=height or info.height,
         frame_count=len(frames),
     )
-    return PoseSequence(meta=meta, model=model_path.stem, frames=frames)
+    seq = PoseSequence(meta=meta, model=model_path.stem, frames=frames)
+    return with_mirrored(seq, mirrored)
