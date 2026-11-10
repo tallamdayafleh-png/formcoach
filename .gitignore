@@ -5,3 +5,8 @@ __pycache__/
 node_modules/
 *.mp4
 *.mov
+
+# Downloaded model files, local clips, generated output
+models/
+data/
+out/

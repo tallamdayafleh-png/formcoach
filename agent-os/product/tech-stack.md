@@ -7,8 +7,8 @@
 | Category | Technology | Purpose |
 |----------|-----------|---------|
 | Language | Python 3.10+ | CV pipeline, agent, and backend |
-| Pose estimation | MediaPipe Pose | Per-frame body keypoints |
-| Video processing | OpenCV | Frame reading, skeleton overlay rendering |
+| Pose estimation | MediaPipe Pose Landmarker (Tasks API, `mediapipe` 1.x) | Per-frame body keypoints |
+| Video processing | OpenCV (`opencv-contrib-python`, installed by mediapipe) | Frame reading, skeleton overlay rendering |
 | Numerics | NumPy | Joint-angle math, signal smoothing for rep detection |
 | LLM | Hosted LLM API (Claude or similar) via a single `call_llm()` wrapper | Coaching feedback, critique, revision |
 | Backend | FastAPI | Upload endpoint, analysis API |
@@ -26,7 +26,11 @@
 - The LLM never sees raw video, only the structured pose-summary JSON.
 - All LLM calls go through `call_llm()` so the provider can be swapped.
 - API keys live in `.env` and are never committed.
-- Lint/format with `ruff`; type hints required on public functions.
+- Lint/format with `ruff`; type hints required on public functions. Ruff config lives in `pyproject.toml`.
+- Use the MediaPipe Tasks API (`PoseLandmarker`); the legacy `mp.solutions` API is removed in mediapipe 1.x.
+- Don't add `opencv-python` to requirements; it conflicts with the `opencv-contrib-python` that mediapipe installs.
+- Dependencies are pinned in `requirements.txt` (runtime) and `requirements-dev.txt` (adds pytest, ruff); develop in a `.venv` virtual environment.
+- Model files (`models/`), local clips (`data/`), and generated output (`out/`) are gitignored, never committed.
 
 ## Repo Layout
 
@@ -38,5 +42,11 @@ formcoach/
 ├── api/                   # FastAPI app
 ├── web/                   # Next.js frontend
 ├── eval/                  # labeled clips metadata + eval scripts
-└── tests/
+├── tests/
+├── models/                # downloaded MediaPipe .task files (gitignored)
+├── data/                  # local video clips (gitignored)
+├── out/                   # generated keypoints JSON + overlay videos (gitignored)
+├── pyproject.toml         # project metadata + ruff config
+├── requirements.txt       # pinned runtime deps
+└── requirements-dev.txt   # + pytest, ruff
 ```

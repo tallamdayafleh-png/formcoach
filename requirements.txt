@@ -1,0 +1,5 @@
+# Runtime dependencies. Verified on Python 3.10.2 (Windows).
+# OpenCV is installed by mediapipe as opencv-contrib-python; do not add
+# opencv-python here, or two conflicting cv2 builds get installed.
+mediapipe==1.2.2
+numpy==2.2.6
