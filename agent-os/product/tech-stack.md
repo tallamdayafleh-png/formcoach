@@ -35,6 +35,7 @@
 - Dependencies are pinned in `requirements.txt` (runtime) and `requirements-dev.txt` (adds pytest, ruff); develop in a `.venv` virtual environment.
 - Model files (`models/`), local clips (`data/`), and generated output (`out/`) are gitignored, never committed.
 - Form and rep thresholds (depth angles, rep hysteresis, minimum rep duration) live only in `config/form_thresholds.json`. Python (`cv/`) and the browser (`web/`) both load that file; never hard-code these numbers in either. JSON is used because both languages parse it natively with no extra dependency.
+- Signal processing in `cv/` (smoothing, gap handling, rep counting) is causal: each frame uses only past frames, via one-frame-at-a-time `update()` classes (`CausalSmoother`, `RepCounter`), so the browser can port them line for line and live and post-set results match. Smoothing is an EMA with a time constant in seconds (`smooth_tau_s`), not a fixed per-frame alpha, so it behaves the same at any frame rate.
 - Live mode runs pose estimation in the browser; webcam video never leaves the device. Only the set summary is sent to the backend for LLM coaching.
 
 ## Repo Layout

@@ -3,7 +3,8 @@ import numpy as np
 import pytest
 
 from cv.landmarks import LANDMARK_INDEX
-from cv.overlay import draw_skeleton, render_overlay, to_pixel
+from cv.overlay import draw_skeleton, hud_lines, render_overlay, to_pixel
+from cv.reps import Rep, RepResult
 from cv.schema import FramePose, Landmark, PoseSequence, VideoMeta
 
 W, H = 200, 400
@@ -56,6 +57,42 @@ def test_face_points_not_drawn():
     img = draw_skeleton(_blank(), lms)
     x, y = to_pixel(lms[LANDMARK_INDEX["nose"]], W, H)
     assert not img[y, x].any()
+
+
+# --- HUD ---------------------------------------------------------------------
+
+
+def _rep(number: int, end_frame: int) -> Rep:
+    return Rep(number, end_frame - 20, end_frame - 10, end_frame, 0, 0, 0, 90, 70)
+
+
+def _reps() -> RepResult:
+    knee = np.array([170.0, 120.0, np.nan, 160.0, 160.0])
+    hip = np.array([175.0, 100.0, np.nan, 165.0, 165.0])
+    return RepResult("left", [_rep(1, 1), _rep(2, 3)], 0.8, knee, hip)
+
+
+def test_hud_without_reps_is_one_line():
+    assert len(hud_lines(FramePose(0, 0.0, None, None))) == 1
+
+
+@pytest.mark.parametrize(("frame", "count"), [(0, 0), (1, 1), (2, 1), (3, 2), (4, 2)])
+def test_hud_rep_count_matches_completed_reps(frame, count):
+    line = hud_lines(FramePose(frame, 0.0, None, None), _reps())[1]
+    assert line.startswith(f"REP {count} ")
+
+
+def test_hud_shows_angles_and_side():
+    line = hud_lines(FramePose(1, 0.0, None, None), _reps())[1]
+    assert "knee 120 deg" in line
+    assert "hip 100 deg" in line
+    assert "(left leg)" in line
+
+
+def test_hud_untrusted_angle_shows_dashes():
+    line = hud_lines(FramePose(2, 0.0, None, None), _reps())[1]
+    assert "knee --" in line
+    assert "hip --" in line
 
 
 # --- render_overlay ----------------------------------------------------------
