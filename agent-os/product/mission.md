@@ -1,6 +1,6 @@
 # Mission: FormCoach
 
-> An AI gym coach that watches your set through your phone camera and tells you, in plain English, exactly what to fix on your next one.
+> An AI gym coach that watches your set through your camera, cues you live as you lift, and tells you, in plain English, exactly what to fix on your next one.
 
 ## Problem
 
@@ -16,23 +16,27 @@ Most people who lift train without a coach. Bad form (knee cave, rounded back, s
 FormCoach pairs computer vision with an LLM agent:
 
 1. **Pose estimation** tracks joints frame by frame and measures angles and reps objectively.
-2. **An LLM coach** turns those measurements into one or two specific, actionable cues tied to a rep number and body part.
-3. **A planner agent** logs the workout and schedules the next session in Notion.
+2. **Live mode** runs pose estimation in the browser on the webcam feed, counts reps as they happen, and gives instant on-screen and audio "depth hit" cues mid-set.
+3. **An LLM coach** turns those measurements into one or two specific, actionable cues tied to a rep number and body part, after the set (for uploads and for live sessions alike).
+4. **A planner agent** logs the workout and schedules the next session in Notion.
 
 ### Differentiators
 
 - **Grounded feedback:** every cue traces back to measured pose data, never guesswork.
 - **Self-checking coach:** feedback is critiqued against a written set of coaching principles (`coach_principles.md`) and revised before the user sees it.
 - **Measured quality:** rep-count accuracy and feedback quality are evaluated on a labeled test set.
+- **Live and post-set, one set of rules:** live cues and post-set analysis use the same thresholds from a shared config, so the coach never contradicts what the lifter heard mid-set.
 
 ## Non-Goals
 
 - Diagnosing injuries or giving medical advice.
 - Replacing in-person coaching for advanced or competitive lifters.
-- Real-time, mid-rep audio cues (post-set feedback only in v1).
+- LLM-generated cues mid-set. Live cues are rule-based (e.g., "depth hit"); the LLM coaches only on the set summary afterward.
+- Streaming live webcam video to a server. Live pose estimation runs in the browser; only the set summary leaves the device.
 
 ## Success Metrics
 
 - ≥95% rep-count accuracy on a 50-clip labeled set.
 - ≥90% of feedback outputs pass every coaching principle on the eval set.
 - Feedback returned in under 15 seconds for a 30-second clip.
+- Live mode: "depth hit" cue within 200 ms of reaching depth, running at ≥15 fps on a mid-range laptop webcam.

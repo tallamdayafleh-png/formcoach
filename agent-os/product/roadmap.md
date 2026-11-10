@@ -9,11 +9,12 @@
 3. [ ] **Rep detection:** detect squat reps from hip/knee angle cycles. `M`
 4. [ ] **Form checks:** flag knee valgus and depth (above parallel) per rep; output a structured pose-summary JSON. `M`
 5. [ ] **Labeled eval set:** hand-label 50 clips (rep count + form issues); script to report accuracy. `M`
-6. [ ] **LLM coach:** generate feedback from the pose summary only. `S`
-7. [ ] **Principle-based critique loop:** draft, critique against `coach_principles.md`, revise (max 2 rounds). `M`
-8. [ ] **Feedback eval:** measure principle pass rate with vs. without the critique loop. `M`
-9. [ ] **API + simple web UI:** FastAPI endpoint and upload page that shows overlay video + feedback. `M`
-10. [ ] **Deploy:** containerize and host a public demo. `S`
+6. [ ] **Live mode:** browser webcam using MediaPipe for Web, a rep state machine, and on-screen + audio "depth hit" cues; LLM coaching runs on the set summary afterward. Depth thresholds come from the shared config file, so Python and browser use the same numbers. `L`
+7. [ ] **LLM coach:** generate feedback from the pose summary only. `S`
+8. [ ] **Principle-based critique loop:** draft, critique against `coach_principles.md`, revise (max 2 rounds). `M`
+9. [ ] **Feedback eval:** measure principle pass rate with vs. without the critique loop. `M`
+10. [ ] **API + simple web UI:** FastAPI endpoint and upload page that shows overlay video + feedback. `M`
+11. [ ] **Deploy:** containerize and host a public demo. `S`
 
 ## Phase 2: Post-Launch
 
