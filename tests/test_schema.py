@@ -2,12 +2,15 @@ import json
 
 import pytest
 
+from cv.landmarks import LANDMARK_INDEX
 from cv.schema import (
     SCHEMA_VERSION,
     FramePose,
     Landmark,
     PoseSequence,
     VideoMeta,
+    parse_mirrored,
+    with_mirrored,
 )
 
 
@@ -56,6 +59,54 @@ def test_wrong_version_rejected():
     data["schema_version"] = 999
     with pytest.raises(ValueError, match="schema_version"):
         PoseSequence.from_dict(data)
+
+
+def test_version_1_file_loads_as_not_mirrored():
+    data = _sequence().to_dict()
+    data["schema_version"] = 1
+    del data["meta"]["mirrored"]
+    assert PoseSequence.from_dict(data).meta.mirrored is False
+
+
+def test_mirrored_flag_round_trips(tmp_path):
+    seq = with_mirrored(_sequence(), True)
+    path = tmp_path / "kp.json"
+    seq.save(path)
+    assert PoseSequence.load(path).meta.mirrored is True
+
+
+def _labelled() -> PoseSequence:
+    """Each landmark's x equals its own index, so swaps are easy to see."""
+    lms = [Landmark(float(i), 0, 0, 0.9, 1) for i in range(33)]
+    meta = VideoMeta(source="v", fps=30, width=10, height=10, frame_count=2)
+    frames = [FramePose(0, 0.0, lms, lms), FramePose(1, 33.0, None, None)]
+    return PoseSequence(meta=meta, model="m", frames=frames)
+
+
+def test_with_mirrored_swaps_left_and_right_labels():
+    seq = with_mirrored(_labelled(), True)
+    lms = seq.frames[0].landmarks
+    assert seq.meta.mirrored is True
+    # the point labelled left_knee (25) is now what was labelled right_knee (26)
+    assert lms[LANDMARK_INDEX["left_knee"]].x == LANDMARK_INDEX["right_knee"]
+    assert lms[LANDMARK_INDEX["right_knee"]].x == LANDMARK_INDEX["left_knee"]
+    assert lms[LANDMARK_INDEX["nose"]].x == LANDMARK_INDEX["nose"]
+    assert seq.frames[0].world_landmarks == lms
+    assert seq.frames[1].landmarks is None  # no-pose frames untouched
+
+
+def test_with_mirrored_is_reversible_and_idempotent():
+    seq = _labelled()
+    once = with_mirrored(seq, True)
+    assert with_mirrored(once, True) is once  # already mirrored: no change
+    assert with_mirrored(once, False) == seq  # swapping back restores labels
+
+
+@pytest.mark.parametrize(
+    ("choice", "value"), [("auto", None), ("yes", True), ("no", False)]
+)
+def test_parse_mirrored(choice, value):
+    assert parse_mirrored(choice) is value
 
 
 def test_values_rounded():

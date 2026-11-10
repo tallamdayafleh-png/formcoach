@@ -9,6 +9,7 @@ increase (MediaPipe's VIDEO mode rejects non-increasing timestamps).
 from __future__ import annotations
 
 import math
+import re
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -58,6 +59,39 @@ def read_info(path: str | Path) -> VideoInfo:
         )
     finally:
         cap.release()
+
+
+_LENS_MODEL_KEY = b"com.apple.quicktime.camera.lens_model"
+_SCAN_BYTES = 4 * 1024 * 1024  # metadata lives in the moov atom: start or end
+
+
+def lens_model(path: str | Path) -> str | None:
+    """Camera lens description from iPhone video metadata, if present.
+
+    e.g. "iPhone 16 Pro front camera 2.69mm f/1.9". Only the first and last
+    few MB are scanned, which is where QuickTime stores its metadata.
+    """
+    path = Path(path)
+    size = path.stat().st_size
+    with path.open("rb") as f:
+        head = f.read(_SCAN_BYTES)
+        f.seek(max(0, size - _SCAN_BYTES))
+        tail = f.read()
+    for chunk in (head, tail):
+        if _LENS_MODEL_KEY not in chunk:
+            continue
+        match = re.search(rb"iPhone[ -~]{0,80}?camera[ -~]{0,40}", chunk)
+        if match:
+            return match.group().decode("ascii").strip()
+    return None
+
+
+def is_front_camera(path: str | Path) -> bool | None:
+    """True/False from iPhone metadata; None if the file doesn't say."""
+    model = lens_model(path)
+    if model is None:
+        return None
+    return "front camera" in model.lower()
 
 
 def fix_timestamp(

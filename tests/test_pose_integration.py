@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from cv.landmarks import LANDMARK_INDEX
 from cv.models import DEFAULT_POSE_MODEL, REPO_ROOT
 from cv.pose import extract_keypoints
 
@@ -27,3 +28,14 @@ def test_extracts_pose_from_real_clip(tmp_path: Path):
     assert all(0.0 <= lm.visibility <= 1.0 for lm in first.landmarks)
     ts = [f.timestamp_ms for f in seq.frames]
     assert all(b > a for a, b in pairwise(ts))
+
+
+def test_front_camera_clip_is_unmirrored_automatically():
+    auto = extract_keypoints(CLIP, max_frames=5)  # mirrored="auto"
+    plain = extract_keypoints(CLIP, max_frames=5, mirrored=False)
+    assert auto.meta.mirrored is True
+    assert plain.meta.mirrored is False
+    # same positions, left/right labels swapped
+    a, p = auto.frames[0].landmarks, plain.frames[0].landmarks
+    assert a[LANDMARK_INDEX["left_knee"]] == p[LANDMARK_INDEX["right_knee"]]
+    assert a[LANDMARK_INDEX["right_knee"]] == p[LANDMARK_INDEX["left_knee"]]

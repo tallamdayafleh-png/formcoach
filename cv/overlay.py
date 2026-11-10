@@ -10,16 +10,19 @@ from __future__ import annotations
 
 import argparse
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 import cv2
 import numpy as np
 
 from cv.config import default_thresholds
+from cv.form import FormSignals, RepForm, form_signals
 from cv.landmarks import BODY_CONNECTIONS, LANDMARK_NAMES
 from cv.pose import resize_max_side
 from cv.reps import RepResult, detect_reps
 from cv.schema import FramePose, Landmark, PoseSequence
+from cv.summary import assess_all
 from cv.video import iter_frames
 
 DEFAULT_OUT_MAX_SIDE = 1280
@@ -101,34 +104,96 @@ def draw_skeleton(
     return image
 
 
+WHITE = (255, 255, 255)
+RED = (0, 0, 255)
+GREEN = (80, 220, 80)
+
+
 def _fmt_deg(x: float) -> str:
     # OpenCV's built-in fonts can't draw the degree sign, so spell it out.
     return "--" if not np.isfinite(x) else f"{x:.0f} deg"
 
 
-def hud_lines(pose: FramePose, reps: RepResult | None = None) -> list[str]:
-    """Text for the HUD: frame/time/status, then rep count and angles."""
+def _fmt(x: float) -> str:
+    return "--" if not np.isfinite(x) else f"{x:.2f}"
+
+
+@dataclass
+class HudContext:
+    """Everything the HUD needs beyond the frame's own pose."""
+
+    reps: RepResult
+    forms: list[RepForm]
+    signals: FormSignals
+    max_thigh_deg: float  # depth threshold, for the live "DEPTH" marker
+
+
+def _verdict(form: RepForm) -> tuple[str, tuple[int, int, int]] | None:
+    if form.depth is not None:
+        d = form.depth
+        if d.hit:
+            return f"rep {form.rep}: DEPTH OK (thigh {_fmt_deg(d.thigh_deg)})", GREEN
+        return f"rep {form.rep}: ABOVE PARALLEL (thigh {_fmt_deg(d.thigh_deg)})", RED
+    if form.valgus is not None:
+        v = form.valgus
+        ratio = _fmt(v.knee_hip_width_ratio)
+        if v.caving:
+            return f"rep {form.rep}: KNEES CAVING (knee/hip width {ratio})", RED
+        return f"rep {form.rep}: KNEES OK (knee/hip width {ratio})", GREEN
+    return None
+
+
+def hud_lines(
+    pose: FramePose, ctx: HudContext | None = None
+) -> list[tuple[str, tuple[int, int, int]]]:
+    """HUD text and colour per line: status, rep count, live values, verdict."""
     status = "pose" if pose.detected else "NO POSE"
-    lines = [f"frame {pose.index}  {pose.timestamp_ms / 1000:.2f}s  {status}"]
-    if reps is not None:
-        i = pose.index
-        lines.append(
-            f"REP {reps.reps_completed_by(i)}   "
-            f"knee {_fmt_deg(reps.knee_deg[i])}   "
-            f"hip {_fmt_deg(reps.hip_deg[i])}   ({reps.side} leg)"
+    lines = [
+        (
+            f"frame {pose.index}  {pose.timestamp_ms / 1000:.2f}s  {status}",
+            WHITE if pose.detected else RED,
         )
+    ]
+    if ctx is None:
+        return lines
+    i, reps = pose.index, ctx.reps
+    view = reps.view.view
+    where = f"{view} view" + (f", {reps.side} leg" if view != "front" else "")
+    lines.append((f"REP {reps.reps_completed_by(i)}   ({where})", WHITE))
+    if view == "front":
+        lines.append(
+            (
+                f"hip height {_fmt(reps.signal[i])}   "
+                f"knee/hip width {_fmt(ctx.signals.knee_width_ratio[i])}",
+                WHITE,
+            )
+        )
+    else:
+        thigh = ctx.signals.thigh_deg[i]
+        depth = "   DEPTH" if np.isfinite(thigh) and thigh <= ctx.max_thigh_deg else ""
+        lines.append(
+            (
+                f"knee {_fmt_deg(reps.knee_deg[i])}   hip {_fmt_deg(reps.hip_deg[i])}"
+                f"   thigh {_fmt_deg(thigh)}{depth}",
+                WHITE,
+            )
+        )
+    last = reps.last_rep_by(i)
+    if last is not None:
+        verdict = _verdict(ctx.forms[last.number - 1])
+        if verdict is not None:
+            lines.append(verdict)
     return lines
 
 
 def draw_hud(
-    image: np.ndarray, pose: FramePose, reps: RepResult | None = None
+    image: np.ndarray, pose: FramePose, ctx: HudContext | None = None
 ) -> np.ndarray:
     """Write the HUD lines in the top-left corner."""
     scale = max(image.shape[:2]) / 1600
     thickness = max(1, round(2 * scale))
-    for n, text in enumerate(hud_lines(pose, reps)):
+    for n, (text, color) in enumerate(hud_lines(pose, ctx)):
         org = (round(20 * scale), round((50 + 45 * n) * scale))
-        color = (255, 255, 255) if pose.detected else (0, 0, 255)
         # dark outline first so the text is readable on any background
         cv2.putText(image, text, org, cv2.FONT_HERSHEY_SIMPLEX, scale, (0, 0, 0),
                     thickness * 3, cv2.LINE_AA)  # fmt: skip
@@ -155,7 +220,14 @@ def render_overlay(
     )
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    reps = detect_reps(seq)
+    th = default_thresholds()
+    reps = detect_reps(seq, th)
+    ctx = HudContext(
+        reps=reps,
+        forms=assess_all(seq, reps, th),
+        signals=form_signals(seq, reps.side, th.tracking),
+        max_thigh_deg=th.squat.depth.max_thigh_deg,
+    )
 
     writer: cv2.VideoWriter | None = None
     n = 0
@@ -176,7 +248,7 @@ def render_overlay(
                     raise RuntimeError(f"Could not open video writer for {out_path}")
             pose = seq.frames[frame.index]
             draw_skeleton(image, pose.landmarks)
-            draw_hud(image, pose, reps)
+            draw_hud(image, pose, ctx)
             writer.write(image)
             n += 1
     finally:

@@ -6,7 +6,13 @@ import numpy as np
 import pytest
 
 from cv.pose import resize_max_side
-from cv.video import fix_timestamp, iter_frames, read_info
+from cv.video import (
+    fix_timestamp,
+    is_front_camera,
+    iter_frames,
+    lens_model,
+    read_info,
+)
 
 
 @pytest.fixture
@@ -71,6 +77,35 @@ def test_iter_frames_max_frames(synthetic_video):
 def test_missing_file_raises(tmp_path):
     with pytest.raises(FileNotFoundError):
         read_info(tmp_path / "nope.mov")
+
+
+# --- camera metadata ---------------------------------------------------------
+
+
+def _fake_mov(tmp_path, lens: bytes, at_end: bool = True):
+    """Bytes laid out like an iPhone .mov: metadata keys, then their values."""
+    meta = b"\x00mdtacom.apple.quicktime.camera.lens_model\x00\x00data\x00" + lens
+    body = b"\x00" * 5_000_000  # bigger than the scan window on each end
+    path = tmp_path / "clip.mov"
+    path.write_bytes(body + meta if at_end else meta + body)
+    return path
+
+
+@pytest.mark.parametrize("at_end", [True, False])
+def test_front_camera_detected(tmp_path, at_end):
+    path = _fake_mov(tmp_path, b"iPhone 16 Pro front camera 2.69mm f/1.9", at_end)
+    assert lens_model(path) == "iPhone 16 Pro front camera 2.69mm f/1.9"
+    assert is_front_camera(path) is True
+
+
+def test_back_camera_detected(tmp_path):
+    path = _fake_mov(tmp_path, b"iPhone 16 Pro back triple camera 6.765mm f/1.78")
+    assert is_front_camera(path) is False
+
+
+def test_no_metadata_is_unknown(synthetic_video):
+    assert lens_model(synthetic_video) is None
+    assert is_front_camera(synthetic_video) is None
 
 
 # --- resize_max_side ---------------------------------------------------------

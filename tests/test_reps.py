@@ -7,7 +7,7 @@ from cv.config import RepThresholds
 from cv.reps import RepCounter, choose_side
 from cv.schema import FramePose, Landmark, PoseSequence, VideoMeta
 
-CFG = RepThresholds(down_deg=130, up_deg=155, min_rep_s=0.5, min_drop_deg=25)
+CFG = RepThresholds(down=130, up=155, min_rep_s=0.5, min_drop=25)
 DT = 1000 / 30  # ms per frame
 
 
@@ -73,7 +73,7 @@ def test_lost_tracking_cancels_rep():
 def test_drop_measured_from_full_standing():
     # Standing at 170 then down to 140 is a 30 deg drop (>= 25), even though
     # the last frame above up_deg (155) is only 15 deg above the bottom.
-    cfg = RepThresholds(down_deg=145, up_deg=155, min_rep_s=0.5, min_drop_deg=25)
+    cfg = RepThresholds(down=145, up=155, min_rep_s=0.5, min_drop=25)
     assert len(count(squat_wave(2, bottom=140), cfg)) == 2
     # Standing only reaches 160: 20 deg drop, rejected.
     assert count(squat_wave(2, bottom=140, top=160), cfg) == []
@@ -85,9 +85,9 @@ def test_too_fast_rep_rejected():
 
 
 def test_uses_config_values():
-    wave = squat_wave(2, bottom=133)  # too shallow for down_deg=130...
+    wave = squat_wave(2, bottom=133)  # too shallow for down=130...
     assert count(wave) == []
-    loose = RepThresholds(down_deg=135, up_deg=155, min_rep_s=0.5, min_drop_deg=25)
+    loose = RepThresholds(down=135, up=155, min_rep_s=0.5, min_drop=25)
     assert len(count(wave, loose)) == 2  # ...but counts with a looser config
 
 
