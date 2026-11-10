@@ -122,7 +122,7 @@ def render_overlay(
     """Write a copy of the video with the skeleton drawn on every frame.
 
     Output is MP4 with the mp4v codec: fine for local review, but browsers
-    can't play it (the web UI in roadmap item 9 will need H.264).
+    can't play it (the web UI in roadmap item 10 will need H.264).
     """
     seq = (
         keypoints

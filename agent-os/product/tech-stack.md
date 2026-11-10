@@ -8,6 +8,9 @@
 |----------|-----------|---------|
 | Language | Python 3.10+ | CV pipeline, agent, and backend |
 | Pose estimation | MediaPipe Pose Landmarker (Tasks API, `mediapipe` 1.x) | Per-frame body keypoints |
+| Live pose estimation | MediaPipe for Web (`@mediapipe/tasks-vision` PoseLandmarker) | In-browser webcam keypoints for live mode |
+| Live cues | Web Audio API / SpeechSynthesis | Audio "depth hit" cues in live mode |
+| Shared thresholds | `config/form_thresholds.json` | One source of truth for depth / rep thresholds, read by Python and the browser |
 | Video processing | OpenCV (`opencv-contrib-python`, installed by mediapipe) | Frame reading, skeleton overlay rendering |
 | Numerics | NumPy | Joint-angle math, signal smoothing for rep detection |
 | LLM | Hosted LLM API (Claude or similar) via a single `call_llm()` wrapper | Coaching feedback, critique, revision |
@@ -31,12 +34,15 @@
 - Don't add `opencv-python` to requirements; it conflicts with the `opencv-contrib-python` that mediapipe installs.
 - Dependencies are pinned in `requirements.txt` (runtime) and `requirements-dev.txt` (adds pytest, ruff); develop in a `.venv` virtual environment.
 - Model files (`models/`), local clips (`data/`), and generated output (`out/`) are gitignored, never committed.
+- Form and rep thresholds (depth angles, rep hysteresis, minimum rep duration) live only in `config/form_thresholds.json`. Python (`cv/`) and the browser (`web/`) both load that file; never hard-code these numbers in either. JSON is used because both languages parse it natively with no extra dependency.
+- Live mode runs pose estimation in the browser; webcam video never leaves the device. Only the set summary is sent to the backend for LLM coaching.
 
 ## Repo Layout
 
 ```
 formcoach/
 ├── agent-os/product/      # mission.md, roadmap.md, tech-stack.md
+├── config/                # form_thresholds.json, shared by Python and browser
 ├── cv/                    # pose extraction, angles, rep detection, form checks
 ├── coach/                 # LLM coach, critique loop, coach_principles.md
 ├── api/                   # FastAPI app
