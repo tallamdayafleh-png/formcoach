@@ -4,8 +4,8 @@
 
 ## Phase 1: MVP (must-have for launch)
 
-1. [ ] **Video upload + pose extraction:** upload a squat video, run MediaPipe Pose, export per-frame keypoints. `S`
-2. [ ] **Skeleton overlay:** render joints and bones on the video for visual verification. `S`
+1. [x] **Video upload + pose extraction:** upload a squat video, run MediaPipe Pose, export per-frame keypoints. `S`
+2. [x] **Skeleton overlay:** render joints and bones on the video for visual verification. `S`
 3. [ ] **Rep detection:** detect squat reps from hip/knee angle cycles. `M`
 4. [ ] **Form checks:** flag knee valgus and depth (above parallel) per rep; output a structured pose-summary JSON. `M`
 5. [ ] **Labeled eval set:** hand-label 50 clips (rep count + form issues); script to report accuracy. `M`
